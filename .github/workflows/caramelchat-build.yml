@@ -5,6 +5,7 @@ on:
     branches: [ dev/1.20.1 ]
   pull_request:
     branches: [ dev/1.20.1 ]
+  workflow_dispatch:
 
 jobs:
   build:
@@ -31,3 +32,30 @@ jobs:
           path: |
             fabric/build/libs/**.jar
             forge/build/libs/**.jar
+  release:
+    needs: build
+    runs-on: ubuntu-slim
+    if: github.event_name == 'workflow_dispatch'
+    permissions:
+      contents: write
+      id-token: write
+      attestations: write
+    steps:
+      - uses: actions/checkout@v4
+      - name: Download a Build Artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: caramelChat-artifacts
+          path: artifacts
+      - uses: actions/attest@v4
+        id: attest
+        with:
+          subject-path: artifacts/**
+      - name: Make release
+        run: |
+          gh release create \
+            nightly.1.20.1.run.${{ github.run_id }} \
+            $(find ./artifacts -type f -name '*.jar') \
+            -p --notes "https://github.com/${{ github.repository }}/runs/${{ github.run_id }} (:octocat: Attestation: ${{ steps.attest.outputs.attestation-url }})"
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
